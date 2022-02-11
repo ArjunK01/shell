@@ -63,13 +63,13 @@ void parse_and_run_command(const std::string &command)
             }
             else
             {
-                std::cout << "invalid command.";
+                std::cerr << "invalid command.";
                 return;
             }
         }
         else if (token == "|")
         {
-            std::cout << "invalid command.";
+            std::cerr << "invalid command.";
             return;
         }
         else
@@ -80,7 +80,7 @@ void parse_and_run_command(const std::string &command)
 
     if (cmd.command_tokens.size() == 0)
     {
-        std::cout << "invalid command.";
+        std::cerr << "invalid command.";
         return;
     }
     if (cmd.command_tokens.at(0) == "exit")
