@@ -89,13 +89,22 @@ void parse_and_run_command(const std::string &command)
     }
     pid_t child_pid = fork();
 
+    if (child_pid < 0)
+    {
+        std::cerr << "Forking Error" << std::endl;
+        return;
+    }
     if (child_pid == 0)
     {
         cmd.pid = getpid();
 
         if (!cmd.inp_redirection.empty())
         {
-            int fd = open(cmd.inp_redirection.c_str(), O_RDONLY);
+            int fd = open(cmd.inp_redirection.c_str(), O_RDONLY); //check docs for values
+            if (fd == -1)
+            {
+                std::cerr << "File Doesnt Exist" << std::endl;
+            }
             dup2(fd, STDIN_FILENO);
             close(fd);
         }
@@ -103,6 +112,10 @@ void parse_and_run_command(const std::string &command)
         if (!cmd.out_redirection.empty())
         {
             int fd = open(cmd.out_redirection.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0666);
+            if (fd == -1)
+            {
+                std::cerr << "File Doesnt Exist" << std::endl;
+            }
             dup2(fd, STDOUT_FILENO);
             close(fd);
         }
