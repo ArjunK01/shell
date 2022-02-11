@@ -123,7 +123,11 @@ void parse_and_run_command(const std::string &command)
     {
         int status;
         waitpid(child_pid, &status, 0);
-        print_status(status);
+        if (cmd.command_tokens.size() > 0)
+        {
+            std::cout << cmd.command_tokens.at(0) << " exit status: " << WEXITSTATUS(status) << "."
+                      << std::endl;
+        }
     }
 
     if (command == "exit")
