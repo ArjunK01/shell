@@ -16,10 +16,14 @@ struct Command
     std::vector<std::string> command_tokens;
     std::string inp_redirection;
     std::string out_redirection;
-    int write_to;
-    int read_from;
+    int write_to = -1;
+    int read_from = -1;
 };
 
+void printthis(std::string temp)
+{
+    std::cout << temp << std::endl;
+}
 void print_status(int status)
 {
     std::cout << "exit status: " << WEXITSTATUS(status) << "."
@@ -113,15 +117,17 @@ void parse_and_run_command(const std::string &command)
             exit(0);
         }
     }
-    for (int i = 0; i < commands.size(); i++)
+    int vec_size = commands.size();
+    for (int i = 0; i < vec_size; i++)
     {
         Command c = commands.at(i);
 
         int pipe_fd[2];
         pipe(pipe_fd);
 
-        if (i != commands.size() - 1)
+        if (i != (vec_size - 1))
         {
+            printthis("DUPING SHIT");
             c.write_to = pipe_fd[1];
             commands.at(i + 1).read_from = pipe_fd[0];
         }
@@ -136,22 +142,23 @@ void parse_and_run_command(const std::string &command)
         }
         if (child_pid == 0)
         {
-            if (c.write_to)
+            if (c.write_to > 0)
             {
-                std::cout << "write:" << c.command_tokens.at(0) << std::endl;
+                std::cerr << "WRITING " << c.write_to << std::endl;
+
                 int k = dup2(c.write_to, STDOUT_FILENO);
                 if (k < 0)
                 {
-                    std::cout << "DUP FAIL" << std::endl;
+                    std::cerr << "WRITING DUP FAIL" << std::endl;
                 }
             }
-            if (c.read_from)
+            if (c.read_from > 0)
             {
-                std::cout << "read:" << c.command_tokens.at(0) << std::endl;
+                std::cerr << "READING " << c.read_from << std::endl;
                 int k = dup2(c.read_from, STDIN_FILENO);
                 if (k < 0)
                 {
-                    std::cout << "DUP FAIL" << std::endl;
+                    std::cerr << "READING DUP FAIL" << std::endl;
                 }
             }
             close(pipe_fd[0]);
@@ -195,34 +202,47 @@ void parse_and_run_command(const std::string &command)
         else
         {
             c.pid = child_pid;
-            // std::cout << "PID inside:" << c.command_tokens.at(0) << " " << c.pid << std::endl;
             close(pipe_fd[0]);
             close(pipe_fd[1]);
-            int status;
-            // std::cout << "PID outside:" << c.command_tokens.at(0) << " " << c.pid << std::endl;
+            std::cerr << "PID inside:" << c.command_tokens.at(0) << " " << c.pid << std::endl;
 
-            waitpid(c.pid, &status, 0);
+            // int status;
+            // // std::cout << "PID outside:" << c.command_tokens.at(0) << " " << c.pid << std::endl;
 
-            if (c.command_tokens.size() > 0)
-            {
-                std::cout << c.command_tokens.at(0) << " exit status: " << WEXITSTATUS(status) << "."
-                          << std::endl;
-            }
+            // waitpid(c.pid, &status, 0);
+
+            // if (c.command_tokens.size() > 0)
+            // {
+            //     std::cout << c.command_tokens.at(0) << " exit status: " << WEXITSTATUS(status) << "."
+            //               << std::endl;
+            // }
         }
     }
 
+    for (int i = 0; i < commands.size(); i++)
+    {
+        int status;
+
+        Command c = commands.at(i);
+        std::cerr << "PID outside:" << c.command_tokens.at(0) << " " << c.pid << std::endl;
+
+        waitpid(c.pid, &status, 0);
+        std::cout << c.command_tokens.at(0) << " exit status: " << WEXITSTATUS(status) << "." << std::endl;
+    }
     // for (Command c : commands)
     // {
     //     int status;
-    //     std::cout << "PID outside:" << c.command_tokens.at(0) << " " << c.pid << std::endl;
+    //     std::cerr << "PID outside:" << c.command_tokens.at(0) << " " << c.pid << std::endl;
 
     //     waitpid(c.pid, &status, 0);
+    //     std::cout << c.command_tokens.at(0) << " exit status: " << WEXITSTATUS(status) << "." << std::endl;
+    //     //               << std::endl;
 
-    //     if (c.command_tokens.size() > 0)
-    //     {
-    //         std::cout << c.command_tokens.at(0) << " exit status: " << WEXITSTATUS(status) << "."
-    //                   << std::endl;
-    //     }
+    //     // if (c.command_tokens.size() > 0)
+    //     // {
+    //     //     std::cout << c.command_tokens.at(0) << " exit status: " << WEXITSTATUS(status) << "."
+    //     //               << std::endl;
+    //     // }
     // }
 }
 
