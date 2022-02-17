@@ -13,13 +13,11 @@
 struct Command
 {
     pid_t pid;
-
-    //must be size at least 1
     std::vector<std::string> command_tokens;
-
-    //Can only be followed by one word
     std::string inp_redirection;
     std::string out_redirection;
+    int write_to;
+    int read_from;
 };
 
 void print_status(int status)
@@ -39,6 +37,7 @@ void parse_and_run_command(const std::string &command)
                                                "<",
                                                ">"};
 
+    std::vector<Command> commands;
     Command cmd;
 
     while (s >> token)
@@ -69,8 +68,14 @@ void parse_and_run_command(const std::string &command)
         }
         else if (token == "|")
         {
-            std::cerr << "invalid command.";
-            return;
+            if (cmd.command_tokens.size() == 0)
+            {
+                std::cerr << "invalid ocmmand.";
+                return;
+            }
+            commands.push_back(cmd);
+            Command cmd2;
+            cmd = cmd2;
         }
         else
         {
@@ -78,76 +83,147 @@ void parse_and_run_command(const std::string &command)
         }
     }
 
-    if (cmd.command_tokens.size() == 0)
+    if (commands.size() == 0 && cmd.command_tokens.size() == 0)
     {
-        std::cerr << "invalid command.";
+        std::cerr << "invalid command." << std::endl;
+
         return;
     }
-    if (cmd.command_tokens.at(0) == "exit")
-    {
-        exit(0);
-    }
-    pid_t child_pid = fork();
+    commands.push_back(cmd);
 
-    if (child_pid < 0)
-    {
-        std::cerr << "Forking Error" << std::endl;
-        return;
-    }
-    if (child_pid == 0)
-    {
-        cmd.pid = getpid();
+    // for (int i = 0; i < commands.size(); i++)
+    // {
+    //     for (auto k = commands.at(i).command_tokens.begin(); k != commands.at(i).command_tokens.end(); k++)
+    //     {
+    //         char *s = (*k).data();
+    //         std::cout << s << " ";
+    //     };
+    //     std::cout << std::endl;
+    // };
 
-        if (!cmd.inp_redirection.empty())
+    for (Command c : commands)
+    {
+        if (c.command_tokens.size() == 0)
         {
-            int fd = open(cmd.inp_redirection.c_str(), O_RDONLY); //check docs for values
-            if (fd == -1)
+            std::cerr << "invalid command." << std::endl;
+            return;
+        }
+        if (c.command_tokens.at(0) == "exit")
+        {
+            exit(0);
+        }
+    }
+    for (int i = 0; i < commands.size(); i++)
+    {
+        Command c = commands.at(i);
+
+        int pipe_fd[2];
+        pipe(pipe_fd);
+
+        if (i != commands.size() - 1)
+        {
+            c.write_to = pipe_fd[1];
+            commands.at(i + 1).read_from = pipe_fd[0];
+        }
+
+        //pipe every other command
+        pid_t child_pid = fork();
+
+        if (child_pid < 0)
+        {
+            std::cerr << "Forking Error" << std::endl;
+            return;
+        }
+        if (child_pid == 0)
+        {
+            if (c.write_to)
             {
-                std::cerr << "File Doesnt Exist" << std::endl;
+                std::cout << "write:" << c.command_tokens.at(0) << std::endl;
+                int k = dup2(c.write_to, STDOUT_FILENO);
+                if (k < 0)
+                {
+                    std::cout << "DUP FAIL" << std::endl;
+                }
             }
-            dup2(fd, STDIN_FILENO);
-            close(fd);
-        }
-
-        if (!cmd.out_redirection.empty())
-        {
-            int fd = open(cmd.out_redirection.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0666);
-            if (fd == -1)
+            if (c.read_from)
             {
-                std::cerr << "File Doesnt Exist" << std::endl;
+                std::cout << "read:" << c.command_tokens.at(0) << std::endl;
+                int k = dup2(c.read_from, STDIN_FILENO);
+                if (k < 0)
+                {
+                    std::cout << "DUP FAIL" << std::endl;
+                }
             }
-            dup2(fd, STDOUT_FILENO);
-            close(fd);
-        }
+            close(pipe_fd[0]);
+            close(pipe_fd[1]);
 
-        std::vector<std::string> words = cmd.command_tokens;
-        std::vector<char *> chars;
-        for (auto i = words.begin(); i != words.end(); i++)
-        {
-            char *s = (*i).data();
-            chars.push_back(s);
+            if (!c.inp_redirection.empty())
+            {
+                int fd = open(c.inp_redirection.c_str(), O_RDONLY); //check docs for values
+                if (fd == -1)
+                {
+                    std::cerr << "File Doesnt Exist" << std::endl;
+                }
+                dup2(fd, STDIN_FILENO);
+                close(fd);
+            }
+
+            if (!c.out_redirection.empty())
+            {
+                int fd = open(c.out_redirection.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0666);
+                if (fd == -1)
+                {
+                    std::cerr << "File Doesnt Exist" << std::endl;
+                }
+                dup2(fd, STDOUT_FILENO);
+                close(fd);
+            }
+
+            std::vector<std::string> words = c.command_tokens;
+            std::vector<char *> chars;
+            for (auto i = words.begin(); i != words.end(); i++)
+            {
+                char *s = (*i).data();
+                chars.push_back(s);
+            }
+            chars.push_back(NULL);
+
+            execv(chars[0], &chars[0]);
+            perror(("Cannot execute " + words.at(0)).c_str());
+            exit(1);
         }
-        chars.push_back(NULL);
-        execv(chars[0], &chars[0]);
-        perror(("Cannot execute " + words.at(0)).c_str());
-        exit(1);
-    }
-    else
-    {
-        int status;
-        waitpid(child_pid, &status, 0);
-        if (cmd.command_tokens.size() > 0)
+        else
         {
-            std::cout << cmd.command_tokens.at(0) << " exit status: " << WEXITSTATUS(status) << "."
-                      << std::endl;
+            c.pid = child_pid;
+            // std::cout << "PID inside:" << c.command_tokens.at(0) << " " << c.pid << std::endl;
+            close(pipe_fd[0]);
+            close(pipe_fd[1]);
+            int status;
+            // std::cout << "PID outside:" << c.command_tokens.at(0) << " " << c.pid << std::endl;
+
+            waitpid(c.pid, &status, 0);
+
+            if (c.command_tokens.size() > 0)
+            {
+                std::cout << c.command_tokens.at(0) << " exit status: " << WEXITSTATUS(status) << "."
+                          << std::endl;
+            }
         }
     }
 
-    if (command == "exit")
-    {
-        exit(0);
-    }
-    //std::cerr << "Not implemented.\n";
+    // for (Command c : commands)
+    // {
+    //     int status;
+    //     std::cout << "PID outside:" << c.command_tokens.at(0) << " " << c.pid << std::endl;
+
+    //     waitpid(c.pid, &status, 0);
+
+    //     if (c.command_tokens.size() > 0)
+    //     {
+    //         std::cout << c.command_tokens.at(0) << " exit status: " << WEXITSTATUS(status) << "."
+    //                   << std::endl;
+    //     }
+    // }
 }
 
 int main(void)

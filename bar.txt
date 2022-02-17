@@ -1,8 +1,0 @@
-Makefile
-bar.txt
-foo.txt
-main.cc
-main.o
-msh
-shell_test.py
-test
