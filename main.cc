@@ -219,7 +219,7 @@ void parse_and_run_command(const std::string &command)
         }
     }
 
-    for (int i = 0; i < commands.size(); i++)
+    for (int i = 0; i < vec_size; i++)
     {
         int status;
 
