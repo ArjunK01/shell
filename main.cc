@@ -183,14 +183,10 @@ void parse_and_run_command(const std::string &command)
         else
         {
             c.pid = child_pid;
-            if (c.read_from > 0)
-            {
-                close(c.read_from);
-            }
-            if (c.write_to > 0)
-            {
-                close(c.write_to);
-            }
+
+            close(c.read_from);
+
+            close(c.write_to);
         }
     }
 
