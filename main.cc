@@ -20,16 +20,6 @@ struct Command
     int read_from = -1;
 };
 
-void printthis(std::string temp)
-{
-    std::cout << temp << std::endl;
-}
-void print_status(int status)
-{
-    std::cout << "exit status: " << WEXITSTATUS(status) << "."
-              << std::endl;
-}
-
 void parse_and_run_command(const std::string &command)
 {
     std::string token;
@@ -41,11 +31,12 @@ void parse_and_run_command(const std::string &command)
                                                "<",
                                                ">"};
 
-    std::vector<Command> commands{Command()};
+    std::vector<Command> commands;
+    Command cmd = Command();
 
     while (s >> token)
     {
-        Command &cmd = commands.back();
+
         if (token == "<")
         {
             if (s >> token && cmd.inp_redirection.empty() && special_token_set.find(token) == special_token_set.end())
@@ -74,10 +65,11 @@ void parse_and_run_command(const std::string &command)
         {
             if (cmd.command_tokens.size() == 0)
             {
-                std::cerr << "invalid ocmmand.";
+                std::cerr << "invalid command.";
                 return;
             }
-            commands.push_back(Command());
+            commands.push_back(cmd);
+            cmd = Command();
         }
         else
         {
@@ -85,22 +77,13 @@ void parse_and_run_command(const std::string &command)
         }
     }
 
+    commands.push_back(cmd);
     if (commands.size() == 0)
     {
         std::cerr << "invalid command." << std::endl;
 
         return;
     }
-
-    // for (int i = 0; i < commands.size(); i++)
-    // {
-    //     for (auto k = commands.at(i).command_tokens.begin(); k != commands.at(i).command_tokens.end(); k++)
-    //     {
-    //         char *s = (*k).data();
-    //         std::cout << s << " ";
-    //     };
-    //     std::cout << std::endl;
-    // };
 
     for (Command c : commands)
     {
@@ -114,6 +97,7 @@ void parse_and_run_command(const std::string &command)
             exit(0);
         }
     }
+
     int vec_size = commands.size();
     int pipe_fd[2];
 
@@ -125,26 +109,24 @@ void parse_and_run_command(const std::string &command)
 
         if (i != (vec_size - 1))
         {
-            // printthis("DUPING SHIT");
             c.write_to = pipe_fd[1];
             commands.at(i + 1).read_from = pipe_fd[0];
         }
 
-        //pipe every other command
-        c.pid = fork();
+        pid_t child_pid = fork();
 
-        if (c.pid < 0)
+        if (child_pid < 0)
         {
             std::cerr << "Forking Error" << std::endl;
             return;
         }
-        if (c.pid == 0)
+        if (child_pid == 0)
         {
             if (c.write_to > 0)
             {
                 // std::cerr << "WRITING " << c.write_to << std::endl;
-                close(pipe_fd[0]);
                 int k = dup2(c.write_to, STDOUT_FILENO);
+                close(pipe_fd[0]);
                 close(pipe_fd[1]);
 
                 if (k < 0)
@@ -156,7 +138,7 @@ void parse_and_run_command(const std::string &command)
             {
                 // std::cerr << "READING " << c.read_from << std::endl;
                 int k = dup2(c.read_from, STDIN_FILENO);
-                close(c.read_from);
+                close(pipe_fd[0]);
                 if (k < 0)
                 {
                     std::cerr << "READING DUP FAIL" << std::endl;
@@ -200,6 +182,7 @@ void parse_and_run_command(const std::string &command)
         }
         else
         {
+            c.pid = child_pid;
             if (c.read_from > 0)
             {
                 close(c.read_from);
@@ -208,20 +191,6 @@ void parse_and_run_command(const std::string &command)
             {
                 close(c.write_to);
             }
-            // close(pipe_fd[0]);
-            // close(pipe_fd[1]);
-            // std::cerr << "PID inside:" << c.command_tokens.at(0) << " " << c.pid << std::endl;
-
-            // int status;
-            // // std::cout << "PID outside:" << c.command_tokens.at(0) << " " << c.pid << std::endl;
-
-            // waitpid(c.pid, &status, 0);
-
-            // if (c.command_tokens.size() > 0)
-            // {
-            //     std::cout << c.command_tokens.at(0) << " exit status: " << WEXITSTATUS(status) << "."
-            //               << std::endl;
-            // }
         }
     }
 
@@ -230,26 +199,10 @@ void parse_and_run_command(const std::string &command)
         int status;
 
         Command c = commands.at(i);
-        // std::cerr << "PID outside:" << c.command_tokens.at(0) << " " << c.pid << std::endl;
 
         waitpid(c.pid, &status, 0);
         std::cout << c.command_tokens.at(0) << " exit status: " << WEXITSTATUS(status) << "." << std::endl;
     }
-    // for (Command c : commands)
-    // {
-    //     int status;
-    //     std::cerr << "PID outside:" << c.command_tokens.at(0) << " " << c.pid << std::endl;
-
-    //     waitpid(c.pid, &status, 0);
-    //     std::cout << c.command_tokens.at(0) << " exit status: " << WEXITSTATUS(status) << "." << std::endl;
-    //     //               << std::endl;
-
-    //     // if (c.command_tokens.size() > 0)
-    //     // {
-    //     //     std::cout << c.command_tokens.at(0) << " exit status: " << WEXITSTATUS(status) << "."
-    //     //               << std::endl;
-    //     // }
-    // }
 }
 
 int main(void)
